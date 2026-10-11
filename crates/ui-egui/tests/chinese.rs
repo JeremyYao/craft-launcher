@@ -161,7 +161,7 @@ fn simplified_chinese_switches_persists_and_keeps_install_actions() {
     if !artcraft_launcher_ui_egui::theme::cjk_font_available(artcraft_launcher_ui_egui::i18n::Lang::ZH_CN) {
         // No Chinese font: choosing it keeps the UI in English, and Settings says why.
         assert_eq!(h.state().as_ref().unwrap().settings.language, "zh-CN");
-        h.get_by_label_contains("No Japanese or Chinese font was found");
+        h.get_by_label_contains("No font for this language was found");
         h.get_by_label("Notify me when an installed app has an update");
         snapshot(&mut h, "settings-zh-CN-no-font");
         return;

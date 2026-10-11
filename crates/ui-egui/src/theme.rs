@@ -247,8 +247,8 @@ pub fn mono_bold() -> FontFamily {
 type Face<'a> = (&'a str, &'static [u8], &'a [([u8; 4], f32)], FontFamily);
 
 /// Registers the site's three variable fonts, each at the weights (and width) it uses there.
-/// `cjk`: the CJK language to draw (Japanese or Simplified Chinese), whose system font is added
-/// behind everything else, or `None` for a language that needs no CJK font.
+/// `cjk`: the CJK language to draw, whose system font is added behind everything else, or `None`
+/// for a language that needs no CJK font.
 pub fn install_fonts(ctx: &egui::Context, cjk: Option<Lang>) {
     const INTER: &[u8] = include_bytes!("../../../assets/fonts/Inter-Variable.ttf");
     const ARCHIVO: &[u8] = include_bytes!("../../../assets/fonts/Archivo-Variable.ttf");
@@ -272,8 +272,8 @@ pub fn install_fonts(ctx: &egui::Context, cjk: Option<Lang>) {
         stack.extend(fallback.iter().cloned());
         fonts.families.insert(family, stack);
     }
-    // Japanese or Chinese, behind everything else, from the system: only when asked for, as the
-    // font is large.
+    // The CJK face, behind everything else, from the system: only when asked for, as the font is
+    // large.
     if let Some(lang) = cjk
         && let Some(font) = cjk_font(lang)
     {
@@ -285,8 +285,8 @@ pub fn install_fonts(ctx: &egui::Context, cjk: Option<Lang>) {
     ctx.set_fonts(fonts);
 }
 
-/// The system's font for a CJK language (`ja`, `zh-CN`), read once per language (tens of MB).
-/// Desktop only: the web build has none, so CJK text can't be drawn there.
+/// The system's font for a CJK language, read once per language (tens of MB). Desktop only: the
+/// web build has none, so CJK text can't be drawn there.
 pub fn cjk_font(lang: Lang) -> Option<Arc<FontData>> {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -299,17 +299,12 @@ pub fn cjk_font(lang: Lang) -> Option<Arc<FontData>> {
     }
 }
 
-/// Loads the system font for `lang`: a Japanese font for Japanese (falling back to a Chinese one,
-/// which draws kana and most kanji), a Chinese font for Chinese.
+/// Loads the system font for the CJK language `lang`: the face for its script, or `None` where the
+/// system has none. Nothing falls back to another script's face — a face for a different script
+/// leaves its characters as tofu — so a language without its font stays in English, like any other.
 #[cfg(not(target_arch = "wasm32"))]
 fn load_cjk(lang: Lang) -> Option<Arc<FontData>> {
-    use crate::cjk_font::Script;
-    let font = if lang == Lang::JA {
-        crate::cjk_font::load(Script::Japanese).or_else(|| crate::cjk_font::load(Script::Chinese))
-    } else {
-        crate::cjk_font::load(Script::Chinese)
-    };
-    font.map(Arc::new)
+    crate::cjk_font::load(lang.script()?).map(Arc::new)
 }
 
 /// The system fonts looked for so far, by language code.

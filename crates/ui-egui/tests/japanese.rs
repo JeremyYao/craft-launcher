@@ -1,8 +1,7 @@
 //! The Japanese UI, in its own test binary: the UI language is process-wide, so it can't share one
-//! with the English UI tests. Japanese is drawn with the system's Japanese font (or, where there is
-//! none, a Chinese CJK font); where neither exists (CI, minimal Linux installs), the UI must stay
-//! in English and say why. `ARTCRAFT_LAUNCHER_SNAPSHOTS=<dir>` also saves screenshots (run with
-//! `-- --test-threads=1`).
+//! with the English UI tests. Japanese is drawn with the system's Japanese font; where there is
+//! none (CI, minimal Linux installs), the UI stays in English and says why.
+//! `ARTCRAFT_LAUNCHER_SNAPSHOTS=<dir>` also saves screenshots (run with `-- --test-threads=1`).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -163,9 +162,9 @@ fn japanese_switches_persists_and_keeps_install_actions() {
     h.get_by_label("Japanese").click_accesskit();
     h.run_steps(3);
     if !artcraft_launcher_ui_egui::theme::cjk_font_available(Lang::JA) {
-        // No Japanese or Chinese font: choosing it keeps the UI in English, and Settings says why.
+        // No font for Japanese: choosing it keeps the UI in English, and Settings says why.
         assert_eq!(h.state().as_ref().unwrap().settings.language, "ja");
-        h.get_by_label_contains("No Japanese or Chinese font was found");
+        h.get_by_label_contains("No font for this language was found");
         h.get_by_label("Notify me when an installed app has an update");
         snapshot(&mut h, "settings-ja-no-font");
         return;

@@ -79,8 +79,8 @@ for `{placeholders}`, `tn` for counts). English in the code is the lookup key; a
 means adding its row to every catalog marked `complete_menus` (the `*.tsv` files in
 `crates/ui-egui/src/i18n/`), which the i18n tests check. Product and app names (ArtCraft Launcher,
 Craft App Suite, PhotoCraft…) stay in English.
-Japanese and Chinese are drawn with the system's own CJK font (`crates/ui-egui/src/cjk_font.rs`,
-desktop only; English where there is none): never bundle a CJK font, they are 10 MB and more.
+A CJK language is drawn with the system's own CJK font (`crates/ui-egui/src/cjk_font.rs`, desktop
+only; English where there is none): never bundle a CJK font, they are 10 MB and more.
 
 ### Other rules
 

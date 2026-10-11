@@ -1,7 +1,6 @@
-//! A CJK font from the operating system, for the Simplified Chinese and Japanese interfaces. The
-//! bundled faces have no CJK glyphs, and a CJK font is too large to ship (10 MB or more), so the
-//! desktop build borrows the one every system that can show these languages already has. Desktop
-//! only.
+//! A CJK font from the operating system, for the CJK interface languages. The bundled faces have
+//! no CJK glyphs, and a CJK font is too large to ship (10 MB or more), so the desktop build
+//! borrows the one every system that can show them already has. Desktop only.
 
 use std::path::{Path, PathBuf};
 
@@ -9,6 +8,8 @@ use egui::epaint::text::VariationCoords;
 use egui::{FontData, FontTweak};
 use skrifa::instance::{LocationRef, Size};
 use skrifa::{FontRef, MetadataProvider, string::StringId};
+
+use crate::i18n::Script;
 
 /// Larger files aren't read: PingFang, the largest candidate, is about 80 MB.
 const MAX_FONT_BYTES: u64 = 100 * 1024 * 1024;
@@ -22,8 +23,8 @@ const BODY_FONT: &[u8] = include_bytes!("../../../assets/fonts/Inter-Variable.tt
 ///
 /// egui puts a fallback glyph's baseline at that face's own ascent and only centres the two line
 /// boxes (`galley_from_rows`), so a face whose metrics differ from the body font's rides off the
-/// baseline: Yu Gothic's line gap alone is half an em, so its kana and kanji sat about 0.29 em
-/// above the Latin text beside them. [`load`] cancels the difference with a `FontTweak`.
+/// baseline: a face with a half-em line gap, for one, sat about a quarter em high. [`load`]
+/// cancels the difference with a `FontTweak`.
 fn face_metrics(data: &[u8], index: u32) -> (f32, f32) {
     let Ok(font) = FontRef::from_index(data, index) else { return (0.0, 0.0) };
     let metrics = font.metrics(Size::unscaled(), LocationRef::default());
@@ -34,30 +35,19 @@ fn face_metrics(data: &[u8], index: u32) -> (f32, f32) {
     (metrics.ascent / upem, (metrics.ascent - metrics.descent + metrics.leading) / upem)
 }
 
-/// Which language's system font to look for. Japanese and Chinese share the CJK code points but
-/// not the faces: Japanese text is drawn with a Japanese font (its kana, and the Japanese forms of
-/// the shared kanji), Chinese with a Chinese one. A Japanese system without a Japanese font can
-/// still draw with a Chinese one, so `theme` falls back; a Chinese one has no such fallback.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Script {
-    Chinese,
-    Japanese,
+/// The script's name, for the log lines.
+fn script_name(script: Script) -> &'static str {
+    match script {
+        Script::Chinese => "Chinese",
+        Script::Japanese => "Japanese",
+    }
 }
 
-impl Script {
-    fn name(self) -> &'static str {
-        match self {
-            Script::Chinese => "Chinese",
-            Script::Japanese => "Japanese",
-        }
-    }
-
-    /// The families looked for, for the "none found" log line.
-    fn families(self) -> &'static str {
-        match self {
-            Script::Chinese => "PingFang SC, Hiragino Sans GB, Heiti SC, Microsoft YaHei, SimSun, Noto Sans CJK SC and WenQuanYi",
-            Script::Japanese => "Hiragino Sans, Yu Gothic, Meiryo, MS Gothic, Noto Sans CJK JP, Noto Sans JP, IPAGothic and TakaoGothic",
-        }
+/// The families looked for, for the "none found" log line.
+fn script_families(script: Script) -> &'static str {
+    match script {
+        Script::Chinese => "PingFang SC, Hiragino Sans GB, Heiti SC, Microsoft YaHei, SimSun, Noto Sans CJK SC and WenQuanYi",
+        Script::Japanese => "Hiragino Sans, Yu Gothic, Meiryo, MS Gothic, Noto Sans CJK JP, Noto Sans JP, IPAGothic and TakaoGothic",
     }
 }
 
@@ -76,7 +66,7 @@ pub(crate) fn load(script: Script) -> Option<FontData> {
             log::debug!("no {family} face in {}", path.display());
             continue;
         };
-        log::info!("{} text uses {family} from {} (face {index})", script.name(), path.display());
+        log::info!("{} text uses {family} from {} (face {index})", script_name(script), path.display());
         // Regular weight, in case the face is variable (Noto Sans CJK VF), and a nudge onto the
         // body font's baseline (see `face_metrics`).
         let (body_ascent, body_height) = face_metrics(BODY_FONT, 0);
@@ -90,7 +80,7 @@ pub(crate) fn load(script: Script) -> Option<FontData> {
         font.index = index;
         return Some(font);
     }
-    log::warn!("no {} font found on this system (looked for {})", script.name(), script.families());
+    log::warn!("no {} font found on this system (looked for {})", script_name(script), script_families(script));
     None
 }
 
@@ -190,8 +180,7 @@ fn chinese_candidates() -> Vec<Candidate> {
     out
 }
 
-/// Where each system keeps a Japanese font, best first. A system with none of these still has the
-/// Chinese candidates above, which draw kana and most kanji (`theme::cjk_font` falls back).
+/// Where each system keeps a Japanese font, best first.
 fn japanese_candidates() -> Vec<Candidate> {
     let mut out = Vec::new();
     let mut add = |path: PathBuf, family: &'static str| out.push(Candidate { path, family });
@@ -309,26 +298,37 @@ mod tests {
         assert_eq!(face_metrics(b"not a font", 0), (0.0, 0.0));
     }
 
-    /// A system CJK font's kana and kanji sit on the Latin baseline, thanks to the nudge in
-    /// [`load`]. Without a CJK font (CI, the web) there is nothing to check.
+    /// A system CJK face sits on the Latin baseline, thanks to the nudge in [`load`]. Without a
+    /// CJK font (CI, the web) there is nothing to check.
     #[test]
     fn cjk_sits_on_the_latin_baseline() {
         use egui::{Color32, FontFamily, FontId};
-        let lang = crate::i18n::Lang::JA;
-        let Some(font) = crate::theme::cjk_font(lang) else { return };
-        let y_offset_factor = font.tweak.y_offset_factor;
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx, Some(lang));
-        let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
-        output.textures_delta.clear();
-        let size = 20.0;
-        let galley = ctx.fonts_mut(|f| f.layout_no_wrap("A漢".to_owned(), FontId::new(size, FontFamily::Proportional), Color32::WHITE));
-        let glyphs = &galley.rows[0].row.glyphs;
-        let pos = |c: char| glyphs.iter().find(|g| g.chr == c).map(|g| g.pos.y);
-        // `pos.y` is the baseline before the nudge (which moves the ink, not `pos`).
-        if let (Some(latin), Some(cjk)) = (pos('A'), pos('漢')) {
-            let rendered = cjk + y_offset_factor * size;
-            assert!((rendered - latin).abs() < 1.0, "latin {latin}, cjk {rendered}, nudge {y_offset_factor}");
+        for info in crate::i18n::LANGUAGES.iter().filter(|l| l.script.is_some()) {
+            let Some(lang) = crate::i18n::Lang::from_code(info.code) else { continue };
+            let Some(font) = crate::theme::cjk_font(lang) else { continue };
+            let y_offset_factor = font.tweak.y_offset_factor;
+            // A character the language's own catalog uses, so the sample fits its script: the face
+            // must draw it, on the Latin baseline.
+            let Some(sample) =
+                info.source.lines().filter_map(|line| line.split('\t').nth(2)).flat_map(str::chars).find(|c| !c.is_ascii() && c.is_alphabetic())
+            else {
+                continue;
+            };
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx, Some(lang));
+            let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+            output.textures_delta.clear();
+            let size = 20.0;
+            let font_id = FontId::new(size, FontFamily::Proportional);
+            let galley = ctx.fonts_mut(|f| f.layout_no_wrap(format!("A{sample}"), font_id.clone(), Color32::WHITE));
+            assert!(ctx.fonts_mut(|f| f.has_glyphs(&font_id, &sample.to_string())), "{}: no glyph for {sample:?}", lang.code());
+            let glyphs = &galley.rows[0].row.glyphs;
+            let pos = |c: char| glyphs.iter().find(|g| g.chr == c).map(|g| g.pos.y);
+            // `pos.y` is the baseline before the nudge (which moves the ink, not `pos`).
+            if let (Some(latin), Some(cjk)) = (pos('A'), pos(sample)) {
+                let rendered = cjk + y_offset_factor * size;
+                assert!((rendered - latin).abs() < 1.0, "{}: latin {latin}, cjk {rendered}, nudge {y_offset_factor}", lang.code());
+            }
         }
     }
 
@@ -343,7 +343,7 @@ mod tests {
     /// Whatever this machine has loads without panicking, and a found face really is the family's.
     #[test]
     fn system_font_loads_when_present() {
-        for script in [Script::Chinese, Script::Japanese] {
+        for script in Script::ALL {
             if let Some(font) = load(script) {
                 let family = candidates(script).into_iter().find(|c| c.path.is_file()).map(|c| c.family);
                 assert!(family.is_some());

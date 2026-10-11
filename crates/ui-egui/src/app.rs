@@ -96,9 +96,9 @@ pub struct LauncherUi {
     /// Fonts registered with `set_fonts` only exist from the next frame on; drawing with the named
     /// weights before then would abort.
     fonts_ready: bool,
-    /// The CJK language whose system font is installed, if any (Japanese or Simplified Chinese).
+    /// The CJK language whose system font is installed, if any.
     /// Set when such a language comes into use, then kept for the session.
-    cjk_font: Option<crate::i18n::Lang>,
+    pub(crate) cjk_font: Option<crate::i18n::Lang>,
     sent_options: Option<BackendOptions>,
     /// Unix seconds of the last look at what's installed (startup counts).
     last_detect: i64,

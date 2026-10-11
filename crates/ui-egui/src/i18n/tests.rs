@@ -340,8 +340,8 @@ fn system_font_covers_chinese_in_every_ui_family() {
     }
 }
 
-/// With the system's Japanese font installed (or a Chinese one it falls back to), every UI family
-/// can draw the whole Japanese catalog. Machines without one (CI, the web) skip this.
+/// With a system CJK font installed, every UI family can draw the whole Japanese catalog.
+/// Machines without one (CI, the web) skip this.
 #[test]
 fn system_font_covers_japanese_in_every_ui_family() {
     use egui::{FontFamily, FontId};
@@ -378,25 +378,16 @@ fn system_font_covers_japanese_in_every_ui_family() {
 fn language_labels_come_from_the_registry() {
     use crate::settings::Settings;
     for lang in Lang::all().filter(|l| !l.needs_cjk_font()) {
-        assert_eq!(Settings::language_label(lang.code()), lang.name());
+        assert_eq!(Settings::language_label(lang.code(), None), lang.name());
     }
-    // Chinese: in English until its font is loaded (which a label never does), then both.
-    // (Other tests may load the font meanwhile.)
-    let before = crate::theme::cjk_font_loaded(Lang::ZH_CN);
-    let label = Settings::language_label(Lang::ZH_CN.code());
-    let after = crate::theme::cjk_font_loaded(Lang::ZH_CN);
-    assert!(label == "Simplified Chinese (简体中文)" || label == "Simplified Chinese", "{label}");
-    assert!(!before || label.contains("简体中文"), "{label}");
-    assert!(after || !label.contains("简体中文"), "{label}");
-    // Japanese: the same, with its own font.
-    let before = crate::theme::cjk_font_loaded(Lang::JA);
-    let label = Settings::language_label(Lang::JA.code());
-    let after = crate::theme::cjk_font_loaded(Lang::JA);
-    assert!(label == "Japanese (日本語)" || label == "Japanese", "{label}");
-    assert!(!before || label.contains("日本語"), "{label}");
-    assert!(after || !label.contains("日本語"), "{label}");
-    assert_eq!(Settings::language_label(Settings::LANGUAGE_AUTO), "Auto");
-    assert_eq!(Settings::language_label("xx"), "Auto");
+    // A CJK language is named in English, and its own name is added only while its face is the one
+    // in the font stack: no other face draws it.
+    assert_eq!(Settings::language_label(Lang::ZH_CN.code(), None), "Simplified Chinese");
+    assert_eq!(Settings::language_label(Lang::ZH_CN.code(), Some(Lang::ZH_CN)), "Simplified Chinese (简体中文)");
+    assert_eq!(Settings::language_label(Lang::JA.code(), Some(Lang::ZH_CN)), "Japanese");
+    assert_eq!(Settings::language_label(Lang::JA.code(), Some(Lang::JA)), "Japanese (日本語)");
+    assert_eq!(Settings::language_label(Settings::LANGUAGE_AUTO, None), "Auto");
+    assert_eq!(Settings::language_label("xx", None), "Auto");
 }
 
 // The parser.
