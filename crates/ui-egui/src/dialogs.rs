@@ -199,10 +199,11 @@ impl LauncherUi {
             self.settings.language = lang_code;
             crate::i18n::set_current(crate::app::effective_lang(&self.settings.language));
         }
-        if crate::i18n::Lang::from_pref(&self.settings.language).needs_cjk_font() && !theme::cjk_font_available() {
+        let pref = crate::i18n::Lang::from_pref(&self.settings.language);
+        if pref.needs_cjk_font() && !theme::cjk_font_available(pref) {
             // In English on purpose: the language asked for can't be drawn.
-            let note = "No Chinese font was found on this system, so the interface stays in English. \
-                        Installing one (Noto Sans CJK, or WenQuanYi on Linux) and restarting fixes it.";
+            let note = "No Japanese or Chinese font was found on this system, so the interface stays in English. \
+                        Installing one (Noto Sans CJK, or your system's own Japanese or Chinese font) and restarting fixes it.";
             ui.add(egui::Label::new(RichText::new(note).size(12.0).color(t.warn)).wrap());
         }
 

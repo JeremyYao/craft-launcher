@@ -85,19 +85,20 @@ The web version shows the same catalog in the browser, with the latest download 
 ## Interface languages
 
 The interface is in English, Brazilian Portuguese (Português (Brasil)), French (Français), German
-(Deutsch), Russian (Русский) or Simplified Chinese (简体中文). **Auto**, the default, follows the
-system or browser language; **Settings → Language** picks one and switches at once, and the choice
-is kept between runs. German locales (`de-DE`, `de-AT`, `de-CH`, `de_DE.UTF-8`…) select German,
-French ones (`fr-FR`, `fr-CA`…) French, and Portuguese ones (`pt-BR`, and `pt-PT` too, for now)
-Brazilian Portuguese. Simplified Chinese locales (`zh-CN`, `zh-SG`, `zh-Hans`, and POSIX forms such
-as `zh_CN.UTF-8`) select Chinese; Traditional Chinese ones don't. To try a language without changing
-the setting, start the desktop app with `ARTCRAFT_LAUNCHER_LOCALE=pt-BR`, or add `?lang=ru` to the
-web address.
+(Deutsch), Japanese (日本語), Russian (Русский) or Simplified Chinese (简体中文). **Auto**, the
+default, follows the system or browser language; **Settings → Language** picks one and switches at
+once, and the choice is kept between runs. German locales (`de-DE`, `de-AT`, `de-CH`, `de_DE.UTF-8`…)
+select German, French ones (`fr-FR`, `fr-CA`…) French, and Portuguese ones (`pt-BR`, and `pt-PT`
+too, for now) Brazilian Portuguese. Simplified Chinese locales (`zh-CN`, `zh-SG`, `zh-Hans`, and
+POSIX forms such as `zh_CN.UTF-8`) select Chinese; Traditional Chinese ones don't. Japanese locales
+(`ja`, `ja-JP`, `ja_JP.UTF-8`…) select Japanese. To try a language without changing the setting,
+start the desktop app with `ARTCRAFT_LAUNCHER_LOCALE=pt-BR`, or add `?lang=ru` to the web address.
 
-Chinese is drawn with the system's own Chinese font (PingFang on macOS, Microsoft YaHei on
-Windows, Noto Sans CJK or WenQuanYi on Linux and FreeBSD). Where there is none, and in the web
-version, the interface stays in English and Settings says why. Product names and release notes
-stay as published; text without a translation falls back to English.
+Japanese and Simplified Chinese are drawn with the system's own CJK font (Hiragino Sans or PingFang
+on macOS, Yu Gothic, Meiryo or Microsoft YaHei on Windows, Noto Sans CJK, IPA, Takao or WenQuanYi on
+Linux and FreeBSD; Japanese falls back to a Chinese font where the system has no Japanese one).
+Where there is none, and in the web version, the interface stays in English and Settings says why.
+Product names and release notes stay as published; text without a translation falls back to English.
 
 ## Where apps are installed
 
