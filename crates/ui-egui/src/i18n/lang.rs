@@ -7,7 +7,7 @@ use super::detect::system_lang;
 
 /// One supported UI language.
 pub struct LangInfo {
-    /// Canonical BCP 47 code (`en`, `ru`, `zh-CN`, `de`, `fr`). Also the `interfaceLanguage` value.
+    /// Canonical BCP 47 code (`en`, `ru`, `zh-CN`, `de`, `fr`, `pt-BR`, `hu`). Also the `interfaceLanguage` value.
     pub code: &'static str,
     /// The language's name in itself, shown in the Preferences dropdown.
     pub name: &'static str,
@@ -56,7 +56,7 @@ pub(super) fn plural_east_slavic(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 6] = [
+pub static LANGUAGES: [LangInfo; 7] = [
     LangInfo {
         code: "en",
         name: "English",
@@ -123,6 +123,17 @@ pub static LANGUAGES: [LangInfo; 6] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
+    LangInfo {
+        code: "hu",
+        name: "Magyar",
+        english_name: "Hungarian",
+        cjk: false,
+        source: include_str!("hu.tsv"),
+        plural: plural_one_other,
+        plural_forms: 2,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
 ];
 
 impl LangInfo {
@@ -156,6 +167,7 @@ impl Lang {
     pub const DE: Lang = Lang(&LANGUAGES[3]);
     pub const FR: Lang = Lang(&LANGUAGES[4]);
     pub const PT_BR: Lang = Lang(&LANGUAGES[5]);
+    pub const HU: Lang = Lang(&LANGUAGES[6]);
 
     pub fn code(self) -> &'static str {
         self.0.code
