@@ -26,12 +26,16 @@ impl Monitor {
                     wake();
                 }
             };
+            // Retry after the portal goes away, backing off to every 5 minutes where there's none.
+            let mut retry = Duration::from_secs(5);
             while state.strong_count() > 0 {
-                if let Err(e) = watch(&publish) {
-                    log::debug!("desktop appearance portal: {e}");
+                match watch(&publish) {
+                    Ok(()) => retry = Duration::from_secs(5),
+                    Err(e) => log::debug!("desktop appearance portal: {e}"),
                 }
                 publish(0);
-                std::thread::sleep(Duration::from_secs(5));
+                std::thread::sleep(retry);
+                retry = (retry * 2).min(Duration::from_secs(300));
             }
         }) {
             log::warn!("couldn't monitor the system theme: {e}");
