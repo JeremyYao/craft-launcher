@@ -26,12 +26,11 @@ pub enum Filter {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SortKey {
-    /// Suite order: classic apps, then new.
+    /// Suite order: classic apps, then new. Settings saved with the removed "Inspired by" sort load as this.
     #[default]
+    #[serde(alias = "InspiredBy")]
     Suite,
     Name,
-    /// The product an app is inspired by.
-    InspiredBy,
     Status,
     /// Installed version.
     Installed,
@@ -89,7 +88,7 @@ pub struct Settings {
     pub sort_descending: bool,
     pub theme: ThemeChoice,
     /// Interface language: `auto` (follow the system) or a language code from the registry
-    /// (`en`, `ru`, `zh-CN`, `de`).
+    /// (`en`, `ru`, `zh-CN`, `de`, `fr`, `pt-BR`, `pl`).
     pub language: String,
     /// Closing the window keeps the launcher in the tray (menu bar) instead of quitting.
     pub close_to_tray: bool,
