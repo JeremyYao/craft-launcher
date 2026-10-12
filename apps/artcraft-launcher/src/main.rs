@@ -5,6 +5,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod motion;
 mod settings_file;
 #[cfg(target_os = "macos")]
 mod spaces;
@@ -51,6 +52,10 @@ fn main() -> ExitCode {
         let waker = waker.clone();
         let _ = wake.set(Box::new(move || waker.wake()));
     }
+
+    // The desktop's animation setting comes over D-Bus: ask now, so the answer is in by the first frame.
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let _ = motion::reduced();
 
     let backend_waker = waker.clone();
     let settings_path = settings_file::path(APP_ID);
@@ -324,6 +329,10 @@ impl Host for DesktopHost {
         login::set_enabled(on)
     }
 
+    fn reduce_motion(&self) -> bool {
+        motion::reduced()
+    }
+
     fn quit(&mut self) {
         self.quit = true;
     }
@@ -588,6 +597,10 @@ impl eframe::App for Shell<'_> {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.launcher.ui.ui(ui, &mut self.launcher.host);
+    }
+
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        self.launcher.ui.raw_input(ctx, raw_input);
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

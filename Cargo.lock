@@ -293,7 +293,9 @@ dependencies = [
  "ron",
  "serde",
  "tray-icon",
+ "winreg",
  "winresource",
+ "zbus",
 ]
 
 [[package]]
