@@ -17,7 +17,9 @@ impl LauncherUi {
             return;
         };
         let t = Tokens::get(ctx);
-        let modal = egui::Modal::new(egui::Id::new("dialog"))
+        // An area is laid out in the size it had last frame, so dialogs can't share one id: the
+        // uninstall prompt would open as tall as Settings and never shrink (#88).
+        let modal = egui::Modal::new(egui::Id::new("dialog").with(dialog.key()))
             .frame(egui::Frame::new().fill(t.bg).stroke(egui::Stroke::new(1.0, t.line_strong)).shadow(theme::shadow(&t)).inner_margin(24));
         let mut close = false;
         let response = match &dialog {
@@ -35,7 +37,7 @@ impl LauncherUi {
     fn alert_popup(&mut self, ctx: &egui::Context) {
         let Some(alert) = self.alerts.iter().find(|a| !self.settings.dismissed_notices.contains(&a.id)).cloned() else { return };
         let t = Tokens::get(ctx);
-        let modal = egui::Modal::new(egui::Id::new("feed_alert"))
+        let modal = egui::Modal::new(egui::Id::new("feed_alert").with(&alert.id))
             .frame(egui::Frame::new().fill(t.bg).stroke(egui::Stroke::new(1.0, t.line_strong)).shadow(theme::shadow(&t)).inner_margin(24));
         let mut ok = false;
         modal.show(ctx, |ui| {
@@ -46,13 +48,16 @@ impl LauncherUi {
                 ui.add(egui::Label::new(RichText::new(&alert.body).color(t.muted)).wrap());
             });
             ui.add_space(14.0);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ok = widgets::button(ui, tl!("OK"), Kind::Primary, 90.0).clicked();
-                if let Some(link) = &alert.link
-                    && widgets::button(ui, tl!("Open link"), Kind::Secondary, 110.0).on_hover_text(link.as_str()).clicked()
-                {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(link.clone()));
-                }
+            // A row: a right-to-left layout straight in the column would fill the height left.
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ok = widgets::button(ui, tl!("OK"), Kind::Primary, 90.0).clicked();
+                    if let Some(link) = &alert.link
+                        && widgets::button(ui, tl!("Open link"), Kind::Secondary, 110.0).on_hover_text(link.as_str()).clicked()
+                    {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(link.clone()));
+                    }
+                });
             });
         });
         // Only OK acknowledges it: Escape or a click outside leaves it for later.
@@ -157,41 +162,92 @@ impl LauncherUi {
         ui.label(RichText::new(how).color(t.muted));
         ui.add_space(20.0);
         let mut close = false;
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if widgets::button(ui, tl!("Uninstall"), Kind::Danger, 110.0).clicked() {
-                self.send(Command::Uninstall { app: id.to_string() });
-                close = true;
-            }
-            if widgets::button(ui, tl!("Cancel"), Kind::Secondary, 90.0).clicked() {
-                close = true;
-            }
+        // A row: a right-to-left layout straight in the column would fill the height left.
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if widgets::button(ui, tl!("Uninstall"), Kind::Danger, 110.0).clicked() {
+                    self.send(Command::Uninstall { app: id.to_string() });
+                    close = true;
+                }
+                if widgets::button(ui, tl!("Cancel"), Kind::Secondary, 90.0).clicked() {
+                    close = true;
+                }
+            });
         });
         close
     }
 
     fn settings_dialog(&mut self, ui: &mut egui::Ui, host: &mut dyn Host) -> bool {
-        let t = Tokens::get(ui.ctx());
-        // Wide enough for the community buttons and every social icon on one row.
-        ui.set_width(520.0);
+        // Leave room for the frame (48 px) and a 16 px gutter on each side.
+        let viewport = ui.ctx().content_rect();
+        ui.set_width(520.0_f32.min((viewport.width() - 80.0).max(0.0)));
+        // The area remembers its previous size. Reset the available height so the scroll area
+        // measures against the viewport immediately, including on the first frame after a resize.
+        ui.set_max_height((viewport.height() - 80.0).max(0.0));
+        ui.spacing_mut().scroll = egui::style::ScrollStyle { foreground_color: true, ..egui::style::ScrollStyle::solid() };
+        let title_top = ui.cursor().top();
         Self::title(ui, Some(crate::icons::artcraft_mark()), tl!("Settings"), &format!("ArtCraft Launcher {}", env!("CARGO_PKG_VERSION")));
+        let title_height = ui.cursor().top() - title_top;
+        let quit_width = widgets::button_width(ui, tl!("Quit ArtCraft Launcher"), 0.0);
+        let done_width = widgets::button_width(ui, tl!("Done"), 90.0);
+        let stack_actions = self.caps.manage_apps && quit_width + done_width + ui.spacing().item_spacing.x > ui.available_width();
+        let footer_height = if stack_actions { 2.0 * theme::CONTROL_H + ui.spacing().item_spacing.y } else { theme::CONTROL_H };
+        let body_height = (viewport.height() - 80.0 - title_height - footer_height - 24.0 - ui.spacing().item_spacing.y).max(0.0);
+        egui::ScrollArea::vertical().id_salt("settings-body").max_height(body_height).auto_shrink([false, true]).show(ui, |ui| {
+            self.settings_contents(ui, host);
+        });
+
+        ui.add_space(24.0);
+        let mut close = false;
+        let quit = |ui: &mut egui::Ui, host: &mut dyn Host| {
+            if self.caps.manage_apps && widgets::button(ui, tl!("Quit ArtCraft Launcher"), Kind::Secondary, 0.0).clicked() {
+                host.quit();
+            }
+        };
+        if stack_actions {
+            quit(ui, host);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                close = widgets::button(ui, tl!("Done"), Kind::Primary, 90.0).clicked();
+            });
+        } else {
+            ui.horizontal(|ui| {
+                quit(ui, host);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    close = widgets::button(ui, tl!("Done"), Kind::Primary, 90.0).clicked();
+                });
+            });
+        }
+        close
+    }
+
+    fn settings_contents(&mut self, ui: &mut egui::Ui, host: &mut dyn Host) {
+        let t = Tokens::get(ui.ctx());
         let section = |ui: &mut egui::Ui, s: &str| {
             ui.add_space(14.0);
             widgets::hud(ui, s, t.faint);
             ui.add_space(6.0);
         };
-        let row = |ui: &mut egui::Ui, label: &str, add: &mut dyn FnMut(&mut egui::Ui)| {
-            ui.horizontal(|ui| {
+        let row = |ui: &mut egui::Ui, label: &str, control_width: f32, add: &mut dyn FnMut(&mut egui::Ui)| {
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let label_width = ui.painter().layout_no_wrap(label.to_string(), font, t.ink).size().x;
+            if label_width + control_width + ui.spacing().item_spacing.x > ui.available_width() {
                 ui.label(label);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add(ui));
-            });
+                add(ui);
+            } else {
+                ui.horizontal(|ui| {
+                    ui.label(label);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add(ui));
+                });
+            }
         };
 
         let mut lang_code = self.settings.language.clone();
-        row(ui, tl!("Language"), &mut |ui| {
-            egui::ComboBox::from_id_salt("language").selected_text(Settings::language_label(&lang_code)).width(180.0).show_ui(ui, |ui| {
+        let installed = self.cjk_font;
+        row(ui, tl!("Language"), 180.0, &mut |ui| {
+            egui::ComboBox::from_id_salt("language").selected_text(Settings::language_label(&lang_code, installed)).width(180.0).show_ui(ui, |ui| {
                 ui.selectable_value(&mut lang_code, Settings::LANGUAGE_AUTO.to_string(), tl!("Auto"));
                 for lang in crate::i18n::Lang::all() {
-                    ui.selectable_value(&mut lang_code, lang.code().to_string(), Settings::language_label(lang.code()));
+                    ui.selectable_value(&mut lang_code, lang.code().to_string(), Settings::language_label(lang.code(), installed));
                 }
             });
         });
@@ -199,16 +255,17 @@ impl LauncherUi {
             self.settings.language = lang_code;
             crate::i18n::set_current(crate::app::effective_lang(&self.settings.language));
         }
-        if crate::i18n::Lang::from_pref(&self.settings.language).needs_cjk_font() && !theme::cjk_font_available() {
+        let pref = crate::i18n::Lang::from_pref(&self.settings.language);
+        if pref.needs_cjk_font() && !theme::cjk_font_available(pref) {
             // In English on purpose: the language asked for can't be drawn.
-            let note = "No Chinese font was found on this system, so the interface stays in English. \
-                        Installing one (Noto Sans CJK, or WenQuanYi on Linux) and restarting fixes it.";
+            let note = "No font for this language was found on this system, so the interface stays in English. \
+                        Installing one (for example Noto Sans CJK) and restarting fixes it.";
             ui.add(egui::Label::new(RichText::new(note).size(12.0).color(t.warn)).wrap());
         }
 
         section(ui, tl!("Updates"));
         let mut every = self.settings.check_every;
-        row(ui, tl!("Check for updates"), &mut |ui| {
+        row(ui, tl!("Check for updates"), 150.0, &mut |ui| {
             egui::ComboBox::from_id_salt("every").selected_text(every.label()).width(150.0).show_ui(ui, |ui| {
                 for e in CheckEvery::ALL {
                     ui.selectable_value(&mut every, e, e.label());
@@ -237,7 +294,7 @@ impl LauncherUi {
                 None
             };
             let mut choice = self.settings.preferred_kinds.first().copied().or(default_kind);
-            row(ui, tl!("Install new apps as"), &mut |ui| {
+            row(ui, tl!("Install new apps as"), 210.0, &mut |ui| {
                 let default_label = match default_kind {
                     Some(k) => crate::i18n::t(k.label()),
                     None => tl!("System package (recommended)"),
@@ -249,6 +306,11 @@ impl LauncherUi {
                     }
                     for k in [PackageKind::Deb, PackageKind::Rpm, PackageKind::Flatpak, PackageKind::AppImage] {
                         ui.selectable_value(&mut choice, Some(k), crate::i18n::t(k.label()));
+                    }
+                    // The tarball is unpacked and run inside the launcher's own sandbox, so it
+                    // is only ever on offer there (as the fallback when the host has no Flatpak).
+                    if is_flatpak {
+                        ui.selectable_value(&mut choice, Some(PackageKind::TarGz), crate::i18n::t(PackageKind::TarGz.label()));
                     }
                 });
             });
@@ -277,7 +339,7 @@ impl LauncherUi {
         section(ui, tl!("Community"));
         ui.label(RichText::new(tl!("Questions, ideas and news from the ArtCraft team")).color(t.muted));
         ui.add_space(6.0);
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             use artcraft_launcher_core::catalog::{DISCORD_URL, GITHUB_URL, WEBSITE_URL};
             if widgets::button(ui, tl!("Join the Discord"), Kind::Primary, 0.0).on_hover_text(DISCORD_URL).clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab(DISCORD_URL));
@@ -288,7 +350,10 @@ impl LauncherUi {
             if widgets::button(ui, tl!("GitHub"), Kind::Secondary, 0.0).on_hover_text(GITHUB_URL).clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab(GITHUB_URL));
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // Wrap the social links as a group so their icons stay together.
+            let count = artcraft_launcher_core::catalog::SOCIAL.len() as f32;
+            let width = count * (16.0 + 8.0) + (count - 1.0).max(0.0) * 4.0;
+            ui.allocate_ui_with_layout(vec2(width, theme::CONTROL_H), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 widgets::social_icons(ui, 16.0);
             });
@@ -300,17 +365,5 @@ impl LauncherUi {
             widgets::cells(ui, &mut theme_choice, &ThemeChoice::ALL.map(|c| (c, Cell { label: c.label(), tip: c.label(), count: None })));
         });
         self.settings.theme = theme_choice;
-
-        ui.add_space(24.0);
-        let mut close = false;
-        ui.horizontal(|ui| {
-            if self.caps.manage_apps && widgets::button(ui, tl!("Quit ArtCraft Launcher"), Kind::Secondary, 0.0).clicked() {
-                host.quit();
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                close = widgets::button(ui, tl!("Done"), Kind::Primary, 90.0).clicked();
-            });
-        });
-        close
     }
 }
