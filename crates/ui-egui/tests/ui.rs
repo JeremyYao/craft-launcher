@@ -947,7 +947,7 @@ fn short_window(reduce: Rc<Cell<bool>>) -> Harness<'static, Option<LauncherUi>> 
 
 /// How far down the window the grid's first card is.
 fn grid_top(h: &Harness<'_, Option<LauncherUi>>) -> f32 {
-    h.get_by_label("Like Adobe Photoshop®").rect().top()
+    h.get_by_label("Image editing").rect().top()
 }
 
 /// Turns the mouse wheel `lines` down over the grid, by way of the shell's `raw_input_hook`. The
@@ -1017,7 +1017,7 @@ fn with_animations_on_the_wheel_glides() {
 /// Moves the pointer from one card to the next. Returns how many frames are drawn before the
 /// window is still again.
 fn frames_to_hover_the_next_card(h: &mut Harness<'_, Option<LauncherUi>>) -> u64 {
-    let cards: Vec<egui::Pos2> = h.query_all_by_label_contains("Like ").map(|n| n.rect().center()).collect();
+    let cards: Vec<egui::Pos2> = ["Image editing", "Vector illustration"].map(|t| h.get_by_label(t).rect().center()).to_vec();
     // Still to begin with: the icons are in, the first card is lit and the scroll bar is showing.
     h.hover_at(cards[0]);
     h.run();

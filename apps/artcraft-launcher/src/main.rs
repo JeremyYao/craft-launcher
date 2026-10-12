@@ -576,11 +576,6 @@ impl<'a> Shell<'a> {
 }
 
 impl eframe::App for Shell<'_> {
-    #[cfg(target_os = "linux")]
-    fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
-        self.launcher.system_theme.apply(input);
-    }
-
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let requests = self.launcher.tick(ctx);
         #[cfg(target_os = "macos")]
@@ -616,6 +611,8 @@ impl eframe::App for Shell<'_> {
     }
 
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        #[cfg(target_os = "linux")]
+        self.launcher.system_theme.apply(raw_input);
         self.launcher.ui.raw_input(ctx, raw_input);
     }
 
