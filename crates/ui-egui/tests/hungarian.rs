@@ -160,15 +160,19 @@ fn check_settings_layout() {
         assert!(screen.contains_rect(title), "{width}x{height}: title is clipped: {title:?}");
         h.get_by_label("Rendszerbeállítás szerint").scroll_to_me();
         h.run_steps(8);
-        // The footer has the same services; keep only links inside the settings body.
+        // The footer has the same services, and every card behind the modal has a small "Webhely"
+        // text link; keep only the settings body's links, which are buttons as tall as Discord's.
         let discord = h.get_by_label("Csatlakozás a Discordhoz").rect();
         let theme = h.get_by_label("Rendszerbeállítás szerint").rect();
         assert!(screen.contains_rect(discord), "community links must be reachable by scrolling");
         assert!(theme.bottom() < done.top(), "appearance controls must scroll above the fixed actions");
         let mut links = vec![discord];
         for label in ["Webhely", "GitHub", "X", "Instagram", "LinkedIn", "YouTube", "TikTok"] {
-            let candidates: Vec<_> =
-                h.query_all_by_label(label).map(|n| n.rect()).filter(|r| r.top() >= discord.top() - 1.0 && r.bottom() < theme.top()).collect();
+            let candidates: Vec<_> = h
+                .query_all_by_label(label)
+                .map(|n| n.rect())
+                .filter(|r| r.top() >= discord.top() - 1.0 && r.bottom() < theme.top() && r.height() >= discord.height() - 1.0)
+                .collect();
             assert_eq!(candidates.len(), 1, "{width}x{height}: settings link {label}: {candidates:?}");
             links.extend(candidates);
         }
