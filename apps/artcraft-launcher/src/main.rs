@@ -8,6 +8,8 @@
 mod settings_file;
 #[cfg(target_os = "macos")]
 mod spaces;
+#[cfg(target_os = "linux")]
+mod system_theme;
 mod tray;
 
 use std::path::PathBuf;
@@ -55,6 +57,11 @@ fn main() -> ExitCode {
     let backend_waker = waker.clone();
     let settings_path = settings_file::path(APP_ID);
     let mut launcher = Launcher::new(Box::new(NativeBackend::new(move || backend_waker.wake())), starts, settings_path.clone());
+    #[cfg(target_os = "linux")]
+    {
+        let theme_waker = waker.clone();
+        launcher.system_theme = system_theme::Monitor::start(move || theme_waker.wake());
+    }
     // Started hidden at login where a window can't hide: start in the tray without mapping one,
     // so no window flashes up. Without a tray to come back from, the window opens after all.
     let mut window = true;
@@ -332,6 +339,8 @@ impl Host for DesktopHost {
 /// Everything that outlives a window: the UI state and its backend, the tray icon, and the work
 /// that goes on with or without a window.
 struct Launcher {
+    #[cfg(target_os = "linux")]
+    system_theme: system_theme::Monitor,
     ui: LauncherUi,
     tray: Option<tray::Tray>,
     host: DesktopHost,
@@ -359,6 +368,8 @@ impl Launcher {
             let _ = asked.send(info.delay);
         });
         Self {
+            #[cfg(target_os = "linux")]
+            system_theme: system_theme::Monitor::default(),
             ui: LauncherUi::new(&windowless, backend, Settings::default()),
             tray: None,
             host: DesktopHost { tray: false, quit: false },
@@ -556,6 +567,11 @@ impl<'a> Shell<'a> {
 }
 
 impl eframe::App for Shell<'_> {
+    #[cfg(target_os = "linux")]
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
+        self.launcher.system_theme.apply(input);
+    }
+
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let requests = self.launcher.tick(ctx);
         #[cfg(target_os = "macos")]
