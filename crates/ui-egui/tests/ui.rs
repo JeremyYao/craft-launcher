@@ -928,12 +928,14 @@ impl Host for OsMotion {
 }
 
 /// The grid in a window too short for it, at 60 frames a second, on an OS asking for fewer
-/// animations (`reduce`) or not.
+/// animations (`reduce`) or not. Nothing is downloading, so the window is still unless something
+/// animates.
 fn short_window(reduce: Rc<Cell<bool>>) -> Harness<'static, Option<LauncherUi>> {
     artcraft_launcher_ui_egui::i18n::set_test_lang(artcraft_launcher_ui_egui::i18n::Lang::EN);
-    let mut backend = Some(Fake { events: events(), sent: Rc::default(), manage: true, clock: Rc::new(Cell::new(NOW)) });
+    let events = events().into_iter().filter(|e| !matches!(e, Event::Progress { .. })).collect();
+    let mut backend = Some(Fake { events, sent: Rc::default(), manage: true, clock: Rc::new(Cell::new(NOW)) });
     let mut host = OsMotion(reduce);
-    let mut h = Harness::builder().with_size(egui::vec2(1180.0, 500.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+    let mut h = Harness::builder().with_size(egui::vec2(1180.0, 500.0)).with_step_dt(1.0 / 60.0).with_max_steps(120).build_ui_state(
         move |ui, state: &mut Option<LauncherUi>| {
             if state.is_none()
                 && let Some(b) = backend.take()
@@ -1019,4 +1021,30 @@ fn with_animations_on_the_wheel_glides() {
     h.run_steps(60);
     let moved = start - grid_top(&h);
     assert!((moved - notch).abs() < 0.5, "moved {moved} of {notch}");
+}
+
+/// Moves the pointer from one card to the next. Returns how many frames are drawn before the
+/// window is still again.
+fn frames_to_hover_the_next_card(h: &mut Harness<'_, Option<LauncherUi>>) -> u64 {
+    let cards: Vec<egui::Pos2> = h.query_all_by_label_contains("Like ").map(|n| n.rect().center()).collect();
+    // Still to begin with: the icons are in, the first card is lit and the scroll bar is showing.
+    h.hover_at(cards[0]);
+    h.run();
+    h.hover_at(cards[1]);
+    h.run()
+}
+
+#[test]
+fn with_animations_off_hovering_a_card_shows_at_once() {
+    let mut h = short_window(Rc::new(Cell::new(true)));
+    let frames = frames_to_hover_the_next_card(&mut h);
+    assert!(frames <= 5, "{frames} frames");
+}
+
+#[test]
+fn with_animations_on_hovering_a_card_animates() {
+    let mut h = short_window(Rc::new(Cell::new(false)));
+    // The rule wipes in and the icon rises over 0.3 s, at 60 frames a second.
+    let frames = frames_to_hover_the_next_card(&mut h);
+    assert!(frames >= 10, "{frames} frames");
 }
