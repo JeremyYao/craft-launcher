@@ -7,7 +7,8 @@ use super::detect::system_lang;
 
 /// One supported UI language.
 pub struct LangInfo {
-    /// Canonical BCP 47 code (`en`, `ru`, `zh-CN`, `de`, `fr`, `pt-BR`, `hu`). Also the `interfaceLanguage` value.
+    /// Canonical BCP 47 code (`en`, `ru`, `zh-CN`, `de`, `fr`, `pt-BR`, `es`, `cs`, `pl`, `hu`). Also
+    /// the `interfaceLanguage` value.
     pub code: &'static str,
     /// The language's name in itself, shown in the Preferences dropdown.
     pub name: &'static str,
@@ -18,7 +19,8 @@ pub struct LangInfo {
     pub cjk: bool,
     /// Catalog file contents (empty for the built-in English).
     pub source: &'static str,
-    /// Plural form index for a count (English and German: 0 = one, 1 = other; Russian: 0 = one,
+    /// Plural form index for a count (English, German, Spanish and Hungarian: 0 = one, 1 = other; Russian:
+    /// 0 = one, 1 = few, 2 = many; Czech: 0 = one, 1 = few, 2 = other; Polish: 0 = one only for 1,
     /// 1 = few, 2 = many; French: 0 = one for 0 and 1; Chinese: always 0).
     pub plural: fn(u64) -> usize,
     /// Number of plural forms the catalog's `@plural` rows carry (checked by tests).
@@ -55,8 +57,29 @@ pub(super) fn plural_east_slavic(n: u64) -> usize {
     }
 }
 
+/// Czech integer counts: 1 is `one`, 2–4 are `few`, everything else is `other`.
+pub(super) fn plural_czech(n: u64) -> usize {
+    match n {
+        1 => 0,
+        2..=4 => 1,
+        _ => 2,
+    }
+}
+
+/// Polish integer counts: only 1 itself is `one` (21 is "21 aplikacji"), 2–4 in the last digit
+/// (but not 12–14) `few`, everything else `many`.
+pub(super) fn plural_polish(n: u64) -> usize {
+    if n == 1 {
+        0
+    } else if matches!(n % 10, 2..=4) && !matches!(n % 100, 12..=14) {
+        1
+    } else {
+        2
+    }
+}
+
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 7] = [
+pub static LANGUAGES: [LangInfo; 10] = [
     LangInfo {
         code: "en",
         name: "English",
@@ -124,6 +147,39 @@ pub static LANGUAGES: [LangInfo; 7] = [
         catalog: OnceLock::new(),
     },
     LangInfo {
+        code: "es",
+        name: "Español",
+        english_name: "Spanish",
+        cjk: false,
+        source: include_str!("es.tsv"),
+        plural: plural_one_other,
+        plural_forms: 2,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
+    LangInfo {
+        code: "cs",
+        name: "Čeština",
+        english_name: "Czech",
+        cjk: false,
+        source: include_str!("cs.tsv"),
+        plural: plural_czech,
+        plural_forms: 3,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
+    LangInfo {
+        code: "pl",
+        name: "Polski",
+        english_name: "Polish",
+        cjk: false,
+        source: include_str!("pl.tsv"),
+        plural: plural_polish,
+        plural_forms: 3,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
+    LangInfo {
         code: "hu",
         name: "Magyar",
         english_name: "Hungarian",
@@ -167,7 +223,10 @@ impl Lang {
     pub const DE: Lang = Lang(&LANGUAGES[3]);
     pub const FR: Lang = Lang(&LANGUAGES[4]);
     pub const PT_BR: Lang = Lang(&LANGUAGES[5]);
-    pub const HU: Lang = Lang(&LANGUAGES[6]);
+    pub const ES: Lang = Lang(&LANGUAGES[6]);
+    pub const CS: Lang = Lang(&LANGUAGES[7]);
+    pub const PL: Lang = Lang(&LANGUAGES[8]);
+    pub const HU: Lang = Lang(&LANGUAGES[9]);
 
     pub fn code(self) -> &'static str {
         self.0.code
