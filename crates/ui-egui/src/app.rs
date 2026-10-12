@@ -76,6 +76,19 @@ pub(crate) enum Dialog {
     LauncherUpdate(artcraft_launcher_core::Release),
 }
 
+impl Dialog {
+    /// What sets this dialog apart from the others, for egui's memory: each one keeps its own
+    /// size there, so a small prompt never opens at the height of the last dialog shown (#88).
+    pub(crate) fn key(&self) -> (&'static str, &str) {
+        match self {
+            Dialog::Notes(id) => ("notes", id),
+            Dialog::ConfirmUninstall(id) => ("uninstall", id),
+            Dialog::Settings => ("settings", ""),
+            Dialog::LauncherUpdate(r) => ("launcher-update", &r.tag),
+        }
+    }
+}
+
 pub struct LauncherUi {
     pub(crate) backend: Box<dyn Backend>,
     pub settings: Settings,
@@ -108,9 +121,9 @@ pub struct LauncherUi {
     /// Fonts registered with `set_fonts` only exist from the next frame on; drawing with the named
     /// weights before then would abort.
     fonts_ready: bool,
-    /// Whether the installed fonts include the system's Chinese font. Added the first time Chinese
-    /// is the language in use, then kept for the session.
-    cjk_fonts: bool,
+    /// The CJK language whose system font is installed, if any.
+    /// Set when such a language comes into use, then kept for the session.
+    pub(crate) cjk_font: Option<crate::i18n::Lang>,
     sent_options: Option<BackendOptions>,
     /// Unix seconds of the last look at what's installed (startup counts).
     last_detect: i64,
@@ -121,12 +134,12 @@ pub struct LauncherUi {
     pub(crate) auto_update_attempted: std::collections::BTreeSet<(String, String)>,
 }
 
-/// The language to draw in: the preference, or English where it needs a Chinese font the system
+/// The language to draw in: the preference, or English where it needs a CJK font the system
 /// doesn't have (Settings says so), rather than boxes for every character. The only place the
-/// Chinese font gets loaded: when Chinese is selected, or Auto resolves to it.
+/// CJK font gets loaded: when such a language is selected, or Auto resolves to it.
 pub(crate) fn effective_lang(pref: &str) -> crate::i18n::Lang {
     let lang = crate::i18n::Lang::from_pref(pref);
-    if lang.needs_cjk_font() && !theme::cjk_font_available() { crate::i18n::Lang::EN } else { lang }
+    if lang.needs_cjk_font() && !theme::cjk_font_available(lang) { crate::i18n::Lang::EN } else { lang }
 }
 
 /// How often to look again at what's installed, to notice apps installed or removed outside
@@ -137,8 +150,9 @@ const RESCAN_ON_FOCUS_AFTER: i64 = 30;
 
 impl LauncherUi {
     pub fn new(ctx: &egui::Context, backend: Box<dyn Backend>, settings: Settings) -> Self {
-        let cjk_fonts = effective_lang(&settings.language).needs_cjk_font();
-        theme::install_fonts(ctx, cjk_fonts);
+        let lang = effective_lang(&settings.language);
+        let cjk_font = lang.needs_cjk_font().then_some(lang);
+        theme::install_fonts(ctx, cjk_font);
         egui_extras::install_image_loaders(ctx);
         let caps = backend.capabilities();
         let platform = backend.platform();
@@ -165,7 +179,7 @@ impl LauncherUi {
             motion_recheck: 0.0,
             applied_motion: None,
             fonts_ready: false,
-            cjk_fonts,
+            cjk_font,
             sent_options: None,
             last_detect: 0,
             was_focused: true,
@@ -177,7 +191,7 @@ impl LauncherUi {
     /// timings belong to a context, and toasts and the next look at the OS's animation setting are
     /// timed on its clock.
     pub fn attach(&mut self, ctx: &egui::Context) {
-        theme::install_fonts(ctx, self.cjk_fonts);
+        theme::install_fonts(ctx, self.cjk_font);
         egui_extras::install_image_loaders(ctx);
         self.fonts_ready = false;
         self.applied_theme = None;
@@ -194,9 +208,10 @@ impl LauncherUi {
         }
     }
 
-    /// Installed apps with an update waiting (the tray shows the count).
+    /// Installed apps with an update waiting (the tray shows the count). Hidden apps are left out,
+    /// so the badge matches the Updates list.
     pub fn update_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.status(self.platform, self.caps.manage_apps) == AppStatus::UpdateAvailable).count()
+        self.entries.iter().filter(|e| self.in_filter(e, Filter::Updates)).count()
     }
 
     /// Something is downloading or installing, the launcher's own update included: quitting now
@@ -389,7 +404,7 @@ impl LauncherUi {
     fn announce_updates(&mut self, host: &mut dyn Host) {
         let mut fresh = Vec::new();
         for e in &self.entries {
-            if e.status(self.platform, self.caps.manage_apps) != AppStatus::UpdateAvailable {
+            if !self.in_filter(e, Filter::Updates) {
                 continue;
             }
             let Some(v) = e.latest_label() else { continue };
@@ -426,7 +441,7 @@ impl LauncherUi {
         let to_update: Vec<(String, String)> = self
             .entries
             .iter()
-            .filter(|e| e.status(self.platform, true) == AppStatus::UpdateAvailable && e.job.is_none() && !e.ready)
+            .filter(|e| self.in_filter(e, Filter::Updates) && e.job.is_none() && !e.ready)
             .filter_map(|e| {
                 let v = e.latest_label()?;
                 if self.auto_update_attempted.contains(&(e.app.id.to_string(), v.clone())) { None } else { Some((e.app.id.to_string(), v)) }
@@ -457,10 +472,10 @@ impl LauncherUi {
         // Set the current language for this frame based on settings.
         let lang = effective_lang(&self.settings.language);
         set_current(lang);
-        // `effective_lang` only picks Chinese once its font has loaded.
-        if lang.needs_cjk_font() && !self.cjk_fonts {
-            theme::install_fonts(&ctx, true);
-            self.cjk_fonts = true;
+        // `effective_lang` only picks a CJK language once its font has loaded.
+        if lang.needs_cjk_font() && self.cjk_font != Some(lang) {
+            theme::install_fonts(&ctx, Some(lang));
+            self.cjk_font = Some(lang);
             self.fonts_ready = false;
         }
         if !self.fonts_ready {
@@ -538,14 +553,8 @@ impl LauncherUi {
             .iter()
             .enumerate()
             .filter(|(_, e)| {
-                let s = e.status(self.platform, self.caps.manage_apps);
-                let keep = match self.settings.filter {
-                    Filter::All => true,
-                    Filter::Installed => s.is_installed(),
-                    Filter::Updates => s == AppStatus::UpdateAvailable,
-                    Filter::NotInstalled => !s.is_installed(),
-                };
-                keep && (needle.is_empty() || e.app.name.to_lowercase().contains(&needle) || e.app.tagline.to_lowercase().contains(&needle))
+                self.in_filter(e, self.settings.filter)
+                    && (needle.is_empty() || e.app.name.to_lowercase().contains(&needle) || e.app.tagline.to_lowercase().contains(&needle))
             })
             .collect();
         let platform = self.platform;
@@ -612,18 +621,20 @@ impl LauncherUi {
     }
 
     pub(crate) fn count(&self, filter: Filter) -> usize {
-        self.entries
-            .iter()
-            .filter(|e| {
-                let s = e.status(self.platform, self.caps.manage_apps);
-                match filter {
-                    Filter::All => true,
-                    Filter::Installed => s.is_installed(),
-                    Filter::Updates => s == AppStatus::UpdateAvailable,
-                    Filter::NotInstalled => !s.is_installed(),
-                }
-            })
-            .count()
+        self.entries.iter().filter(|e| self.in_filter(e, filter)).count()
+    }
+
+    /// Whether `entry` belongs in `filter`. Hidden apps stay out of every list except Hidden.
+    pub(crate) fn in_filter(&self, entry: &AppEntry, filter: Filter) -> bool {
+        let hidden = self.settings.hidden.contains(entry.app.id);
+        let status = entry.status(self.platform, self.caps.manage_apps);
+        match filter {
+            Filter::Hidden => hidden,
+            Filter::All => !hidden,
+            Filter::Installed => !hidden && status.is_installed(),
+            Filter::Updates => !hidden && status == AppStatus::UpdateAvailable,
+            Filter::NotInstalled => !hidden && !status.is_installed(),
+        }
     }
 
     fn draw_toasts(&mut self, ctx: &egui::Context) {

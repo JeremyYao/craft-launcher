@@ -82,10 +82,12 @@ spinners keep moving.
 
 Every user-facing string goes through `crates/ui-egui/src/i18n` (`tl!("…")` for literals, `fmt`
 for `{placeholders}`, `tn` for counts). English in the code is the lookup key; adding a string
-means adding its row to every catalog marked `complete_menus` (`ru.tsv`, `zh-CN.tsv`, `de.tsv`),
-which the i18n tests check. Product and app names (ArtCraft Launcher, Craft App Suite, PhotoCraft…) stay in English.
-Chinese is drawn with the system's own CJK font (`crates/ui-egui/src/cjk_font.rs`, desktop only;
-English where there is none): never bundle a CJK font, they are 10 MB and more.
+means adding its row to every catalog marked `complete_menus` (the `*.tsv` files in
+`crates/ui-egui/src/i18n/`), which the i18n tests check. Translate clean-room from the meaning of
+the English text, never through another catalog. Product and app names (ArtCraft Launcher, Craft
+App Suite, PhotoCraft…) stay in English.
+A CJK language is drawn with the system's own CJK font (`crates/ui-egui/src/cjk_font.rs`, desktop
+only; English where there is none): never bundle a CJK font, they are 10 MB and more.
 
 ### Other rules
 
@@ -148,6 +150,16 @@ Packaging facts the code relies on:
   normal Dock app that can also sit in the menu bar: `LSUIElement` must never be set.
 - Linux: the tray uses StatusNotifierItem over D-Bus and notifications use
   `org.freedesktop.Notifications`, both in pure Rust (no GTK, appindicator or libdbus).
+- Inside the Flatpak launcher (`process::in_sandbox()`), apps normally install as host Flatpaks
+  and run through `flatpak-spawn --host`. When the host has no usable Flatpak — none installed,
+  or `flatpak-spawn` not allowed — `linux::order_available_kinds` offers the release tarball
+  instead: it is unpacked into `<data>/apps/<app>` (`bin/`, `share/`) and run with `HOME` =
+  `<data>/apps/<app>/home`, so a Craft App's settings stay in the sandbox. An update swaps
+  `bin/` and `share/` and keeps `home/`; removing the app takes those two folders only. Outside
+  a sandbox the tarball is not on offer at all.
+- `--socket=pulseaudio` in the launcher manifests is for an app running *inside* the sandbox
+  (SoundCraft's ALSA reaches the runtime's PulseAudio plugin through it); it also covers the
+  microphone, which SoundCraft records through.
 - `build.rs` reads `ARTCRAFT_LAUNCHER_BUILD_SHA` / `ARTCRAFT_LAUNCHER_BUILD_DATE` and, on Windows,
   embeds `assets/app-icon/artcraft-launcher.ico`, failing the build when
   `ARTCRAFT_LAUNCHER_REQUIRE_WINRES=1` and it can't.

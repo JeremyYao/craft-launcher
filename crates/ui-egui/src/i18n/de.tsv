@@ -118,6 +118,10 @@
 	Apps on this computer	Apps auf diesem Computer
 	Installed apps with a newer version	Installierte Apps mit neuerer Version
 	Apps you can install	Apps, die du installieren kannst
+	Hide App	App ausblenden
+	Unhide App	App einblenden
+	Hidden Apps	Ausgeblendete Apps
+	Apps you hid	Apps, die du ausgeblendet hast
 	Checked {ago} · using {sources}	Zuletzt geprüft: {ago} · über {sources}
 	{a} and {b}	{a} und {b}
 	Join the Discord	Dem Discord beitreten
@@ -203,6 +207,7 @@ month	Dec	Dez.
 	{version} installed → {latest} released	{version} installiert → {latest} veröffentlicht
 	Version {version}	Version {version}
 	{installed} installed · latest {latest}	{installed} installiert · neueste {latest}
+	Installed · latest {latest}	Installiert · neueste {latest}
 	Version {version} installed	Version {version} installiert
 	Version {latest}	Version {latest}
 	No release published yet	Noch keine Version veröffentlicht

@@ -22,6 +22,8 @@ pub enum Filter {
     Installed,
     Updates,
     NotInstalled,
+    /// Apps the user chose to hide from the other lists.
+    Hidden,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,7 +90,7 @@ pub struct Settings {
     pub sort_descending: bool,
     pub theme: ThemeChoice,
     /// Interface language: `auto` (follow the system) or a language code from the registry
-    /// (`en`, `ru`, `zh-CN`, `de`).
+    /// (`en`, `ru`, `zh-CN`, `de`, `fr`, `pt-BR`, `pl`).
     pub language: String,
     /// Closing the window keeps the launcher in the tray (menu bar) instead of quitting.
     pub close_to_tray: bool,
@@ -110,6 +112,8 @@ pub struct Settings {
     pub notified: BTreeMap<String, String>,
     /// Unix seconds of the last finished check.
     pub last_check: Option<i64>,
+    /// Catalog ids of apps hidden from the main lists (`photocraft`, …).
+    pub hidden: std::collections::BTreeSet<String>,
 }
 
 impl Settings {
@@ -117,13 +121,13 @@ impl Settings {
     pub const LANGUAGE_AUTO: &'static str = "auto";
 
     /// Display name for a language `code`: a language's name in itself, from the registry
-    /// ([`LANGUAGES`](crate::i18n::LANGUAGES)). A language needing the system's Chinese font is
-    /// named in English, with its own name added only once that font is loaded (labels never load
-    /// it: choosing the language does); "Auto" for `auto` and unknown codes, like
+    /// ([`LANGUAGES`](crate::i18n::LANGUAGES)). A language needing a CJK font is named in English,
+    /// with its own name added only while `installed` — the CJK face in the current font stack — is
+    /// that language (no other face draws it); "Auto" for `auto` and unknown codes, like
     /// [`Lang::from_pref`](crate::i18n::Lang::from_pref).
-    pub fn language_label(code: &str) -> String {
+    pub fn language_label(code: &str, installed: Option<crate::i18n::Lang>) -> String {
         match crate::i18n::Lang::from_code(code) {
-            Some(lang) if lang.needs_cjk_font() && crate::theme::cjk_font_loaded() => format!("{} ({})", lang.english_name(), lang.name()),
+            Some(lang) if lang.needs_cjk_font() && installed == Some(lang) => format!("{} ({})", lang.english_name(), lang.name()),
             Some(lang) if lang.needs_cjk_font() => lang.english_name().to_string(),
             Some(lang) => lang.name().to_string(),
             None => t("Auto").to_string(),
@@ -181,6 +185,7 @@ impl Default for Settings {
             dismissed_notices: std::collections::BTreeSet::new(),
             notified: BTreeMap::new(),
             last_check: None,
+            hidden: std::collections::BTreeSet::new(),
         }
     }
 }

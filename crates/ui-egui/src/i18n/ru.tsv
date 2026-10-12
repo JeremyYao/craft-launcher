@@ -116,6 +116,10 @@
 	Apps on this computer	Приложения на этом компьютере
 	Installed apps with a newer version	Установленные приложения, у которых есть новая версия
 	Apps you can install	Приложения, которые можно установить
+	Hide App	Скрыть приложение
+	Unhide App	Показать приложение
+	Hidden Apps	Скрытые приложения
+	Apps you hid	Приложения, которые вы скрыли
 	Checked {ago} · using {sources}	Проверено {ago} · через {sources}
 	{a} and {b}	{a} и {b}
 	Join the Discord	Присоединиться к Discord
@@ -201,6 +205,7 @@ month	Dec	дек.
 	{version} installed → {latest} released	{version} установлено → {latest} выпущено
 	Version {version}	Версия {version}
 	{installed} installed · latest {latest}	{installed} установлено · последняя {latest}
+	Installed · latest {latest}	Установлено · последняя {latest}
 	Version {version} installed	Версия {version} установлена
 	Version {latest}	Версия {latest}
 	No release published yet	Релиз ещё не опубликован
